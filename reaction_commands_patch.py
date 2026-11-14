@@ -101,9 +101,13 @@ def patch_app_file(app_file: Path) -> None:
             raise RuntimeError("No encontré el punto de inserción para ?kill.")
         source = source.replace(insertion, KILL_HANDLER + insertion, 1)
 
-    # Keep ?spank's original text and use its random anime-spank category.
-    source = source.replace('random_anime_gif("slap")', 'random_anime_gif("slap")')
-    spank_description = 'description=f"🍑 {message.author.mention} le dio una nalgada a {target.mention}."'
+    # Use the requested playful copy while retaining the random SFW anime spank GIF.
+    source = source.replace(
+        'description=f"🍑 {message.author.mention} le dio una nalgada a {target.mention}."',
+        'description=f"🍑 {message.author.mention} le da una palmadita traviesa a {target.mention}."',
+    )
+
+    spank_description = 'description=f"🍑 {message.author.mention} le da una palmadita traviesa a {target.mention}."'
     description_at = source.find(spank_description)
     if description_at < 0:
         raise RuntimeError("No encontré el embed de ?spank.")

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from message_reactions_patch import patch_app as patch_message_features
 from reaction_commands_patch import patch_app_file as patch_reaction_commands
+from announcement_embed_patch import patch_app_file as patch_announcement
 from premium_backup_patch import patch_app_file as patch_premium_features
 from premium_key_commands_patch import patch_app_file as remove_premium_key_commands
 from global_commands_patch import patch_app_file as patch_global_commands
@@ -35,6 +36,7 @@ def main():
     fix_welcome_async_declaration()
     patch_message_features(APP_FILE)
     patch_reaction_commands(APP_FILE)
+    patch_announcement(APP_FILE)
     patch_premium_features(APP_FILE)
     remove_premium_key_commands(APP_FILE)
     patch_ticket_image(APP_FILE)

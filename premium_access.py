@@ -1,7 +1,7 @@
-"""Application command tree: retain only command-specific Premium checks.
+"""Premium command policy.
 
-Ordinary commands remain available to everyone. Premium-only features enforce
-entitlement in their own handlers, so this tree must not impose a blanket gate.
+Premium is checked by the handlers of features that actually require it;
+there is deliberately no blanket Premium gate for ordinary slash commands.
 """
 from discord import app_commands
 
@@ -9,8 +9,6 @@ FREE_COMMANDS = frozenset({"lockdown", "filtro-cuentas"})
 
 
 class PremiumCommandTree(app_commands.CommandTree):
-    """Allow commands through to their handlers' own authorization checks."""
-
     async def interaction_check(self, interaction):
         return True
 

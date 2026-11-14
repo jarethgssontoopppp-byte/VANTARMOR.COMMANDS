@@ -1,12 +1,13 @@
 from pathlib import Path
 
 IMPORT_LINE = "from premium_security_system import register_security_commands\n"
-ACCESS_IMPORT_LINE = "from premium_access import PremiumCommandTree\n"
-TREE_LINE = "tree = app_commands.CommandTree(client)\n"
-PREMIUM_TREE_LINE = "tree = PremiumCommandTree(client)\n"
 REGISTER_LINE = "register_security_commands(tree, client)\n"
-OLD_ACCESS_IMPORT_LINE = "from premium_access import install_premium_access\n"
-OLD_ACCESS_REGISTER_LINE = "install_premium_access(tree)\n"
+
+FREE_SECURITY_GUARD = (
+    '    if interaction.command and interaction.command.name not in {"lockdown", "filtro-cuentas"} '
+    'and not is_premium_user(interaction.user.id):\n'
+)
+OLD_PREMIUM_GUARD = '    if not is_premium_user(interaction.user.id):\n'
 
 
 def patch_app_file(app_file: Path) -> None:
@@ -16,35 +17,22 @@ def patch_app_file(app_file: Path) -> None:
         if import_anchor not in source:
             raise RuntimeError("No encontré el punto de importación de app_commands en app.py.")
         source = source.replace(import_anchor, import_anchor + IMPORT_LINE, 1)
-    if ACCESS_IMPORT_LINE not in source:
-        source = source.replace(IMPORT_LINE, IMPORT_LINE + ACCESS_IMPORT_LINE, 1)
-    source = source.replace(OLD_ACCESS_IMPORT_LINE, "")
-
-    if PREMIUM_TREE_LINE not in source:
-        if TREE_LINE not in source:
-            raise RuntimeError("No encontré la creación del árbol de comandos en app.py.")
-        source = source.replace(TREE_LINE, PREMIUM_TREE_LINE, 1)
-    source = source.replace(OLD_ACCESS_REGISTER_LINE, "")
+    tree_anchor = "tree = app_commands.CommandTree(client)\n"
     if REGISTER_LINE not in source:
-        if PREMIUM_TREE_LINE not in source:
-            raise RuntimeError("No encontré la creación de PremiumCommandTree en app.py.")
-        source = source.replace(PREMIUM_TREE_LINE, PREMIUM_TREE_LINE + REGISTER_LINE, 1)
+        if tree_anchor not in source:
+            raise RuntimeError("No encontré la creación del árbol de comandos en app.py.")
+        source = source.replace(tree_anchor, tree_anchor + REGISTER_LINE, 1)
     app_file.write_text(source, encoding="utf-8")
 
-    # Keep the two explicitly free security commands free, while the other
-    # security commands continue to check Premium inside their handlers.
+    # Preserve the requested free security commands while keeping all the other
+    # security controls Premium-only.
     security_file = app_file.with_name("premium_security_system.py")
     security_source = security_file.read_text(encoding="utf-8")
-    old_guard = 'if not is_premium_user(interaction.user.id):'
-    new_guard = (
-        'if interaction.command and interaction.command.name not in {"lockdown", "filtro-cuentas"} '
-        'and not is_premium_user(interaction.user.id):'
-    )
-    if old_guard in security_source:
-        security_source = security_source.replace(old_guard, new_guard, 1)
-    elif new_guard not in security_source:
+    if OLD_PREMIUM_GUARD in security_source:
+        security_source = security_source.replace(OLD_PREMIUM_GUARD, FREE_SECURITY_GUARD, 1)
+        security_file.write_text(security_source, encoding="utf-8")
+    elif FREE_SECURITY_GUARD not in security_source:
         raise RuntimeError("No encontré la validación Premium esperada en premium_security_system.py.")
-    security_file.write_text(security_source, encoding="utf-8")
 
 
 __all__ = ["patch_app_file"]
