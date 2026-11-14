@@ -99,14 +99,14 @@ def patch_app_file(app_file: Path) -> None:
         )
         source = source.replace(marker, helpers + "\n" + marker, 1)
 
-    handler_marker = '    if command in ("?hug", "?spank"):\n'
+    if '    if command in ("?hug", "?spank"):\n' not in source:
+        raise RuntimeError("No encontré el manejador existente de ?spank.")
+
     if KILL_HANDLER.strip() not in source:
         insertion = '    if command not in ("?kiss", "?slap"):\n'
         if insertion not in source:
             raise RuntimeError("No encontré el punto de inserción para ?kill.")
         source = source.replace(insertion, KILL_HANDLER + insertion, 1)
-    if handler_marker not in source:
-        raise RuntimeError("No encontré el manejador existente de ?spank.")
 
     banana_marker = '    if command == "?banana":\n'
     premium_guard = (
@@ -115,33 +115,36 @@ def patch_app_file(app_file: Path) -> None:
         '        return True\n\n'
     )
     if premium_guard.strip() not in source:
+        if banana_marker not in source:
+            raise RuntimeError("No encontré el comando ?banana.")
         source = source.replace(banana_marker, premium_guard + banana_marker, 1)
 
-    # Use a non-explicit anime slapstick GIF for spank, and add the recipient-only return button.
     source = source.replace('random_anime_gif("spank")', 'random_anime_gif("slap")')
-    spank_reply = (
-        '        await message.reply(\n'
-        '            embed=embed,\n'
-        '            mention_author=False,\n'
-        '            allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),\n'
-        '        )\n'
-        '        return True\n\n'
-        '    if command not in ("?kiss", "?slap"): '
-    )
-    replacement = (
-        '        await message.reply(\n'
-        '            embed=embed,\n'
-        '            view=SpankReturnView(message.author, target),\n'
-        '            mention_author=False,\n'
-        '            allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),\n'
-        '        )\n'
-        '        return True\n\n'
-        '    if command not in ("?kiss", "?slap"): '
-    )
-    if 'view=SpankReturnView(message.author, target)' not in source:
-        if spank_reply not in source:
-            raise RuntimeError("No encontré la respuesta de ?spank para añadir el botón.")
-        source = source.replace(spank_reply, replacement, 1)
+
+    # Find the reply belonging to the spank embed by anchoring on its unique
+    # description, rather than matching a brittle multiline block verbatim.
+    spank_description = 'description=f"🍑 {message.author.mention} le dio una nalgada a {target.mention}."'
+    description_at = source.find(spank_description)
+    if description_at < 0:
+        raise RuntimeError("No encontré el embed de ?spank.")
+    reply_at = source.find("        await message.reply(\n", description_at)
+    if reply_at < 0:
+        raise RuntimeError("No encontré el envío del mensaje de ?spank.")
+    reply_end = source.find("        return True", reply_at)
+    if reply_end < 0:
+        raise RuntimeError("No encontré el final del manejador de ?spank.")
+    reply_block = source[reply_at:reply_end]
+    if "view=SpankReturnView(message.author, target)" not in reply_block:
+        embed_line = "            embed=embed,\n"
+        if embed_line not in reply_block:
+            raise RuntimeError("No encontré el embed en la respuesta de ?spank.")
+        reply_block = reply_block.replace(
+            embed_line,
+            embed_line + "            view=SpankReturnView(message.author, target),\n",
+            1,
+        )
+        source = source[:reply_at] + reply_block + source[reply_end:]
+
     app_file.write_text(source, encoding="utf-8")
 
 
