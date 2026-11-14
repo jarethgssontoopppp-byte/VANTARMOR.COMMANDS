@@ -1,9 +1,12 @@
 from pathlib import Path
 
 IMPORT_LINE = "from premium_security_system import register_security_commands\n"
+ACCESS_IMPORT_LINE = "from premium_access import PremiumCommandTree\n"
+TREE_LINE = "tree = app_commands.CommandTree(client)\n"
+PREMIUM_TREE_LINE = "tree = PremiumCommandTree(client)\n"
 REGISTER_LINE = "register_security_commands(tree, client)\n"
-ACCESS_IMPORT_LINE = "from premium_access import install_premium_access\n"
-ACCESS_REGISTER_LINE = "install_premium_access(tree)\n"
+OLD_ACCESS_IMPORT_LINE = "from premium_access import install_premium_access\n"
+OLD_ACCESS_REGISTER_LINE = "install_premium_access(tree)\n"
 
 
 def patch_app_file(app_file: Path) -> None:
@@ -15,18 +18,21 @@ def patch_app_file(app_file: Path) -> None:
         source = source.replace(import_anchor, import_anchor + IMPORT_LINE, 1)
     if ACCESS_IMPORT_LINE not in source:
         source = source.replace(IMPORT_LINE, IMPORT_LINE + ACCESS_IMPORT_LINE, 1)
+    source = source.replace(OLD_ACCESS_IMPORT_LINE, "")
 
-    tree_anchor = "tree = app_commands.CommandTree(client)\n"
-    if REGISTER_LINE not in source:
-        if tree_anchor not in source:
+    if PREMIUM_TREE_LINE not in source:
+        if TREE_LINE not in source:
             raise RuntimeError("No encontré la creación del árbol de comandos en app.py.")
-        source = source.replace(tree_anchor, tree_anchor + REGISTER_LINE, 1)
-    if ACCESS_REGISTER_LINE not in source:
-        source = source.replace(REGISTER_LINE, REGISTER_LINE + ACCESS_REGISTER_LINE, 1)
+        source = source.replace(TREE_LINE, PREMIUM_TREE_LINE, 1)
+    source = source.replace(OLD_ACCESS_REGISTER_LINE, "")
+    if REGISTER_LINE not in source:
+        if PREMIUM_TREE_LINE not in source:
+            raise RuntimeError("No encontré la creación de PremiumCommandTree en app.py.")
+        source = source.replace(PREMIUM_TREE_LINE, PREMIUM_TREE_LINE + REGISTER_LINE, 1)
     app_file.write_text(source, encoding="utf-8")
 
-    # Keep the two explicitly free security commands admin-only, but do not
-    # require Premium in their handler after the global Premium gate exempts them.
+    # Lockdown and account-age filtering remain free; all other security commands
+    # retain the Premium check in their individual handlers.
     security_file = app_file.with_name("premium_security_system.py")
     security_source = security_file.read_text(encoding="utf-8")
     old_guard = 'if not is_premium_user(interaction.user.id):'
