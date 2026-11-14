@@ -55,9 +55,6 @@ class KillRoleplayView(discord.ui.View):
 '''
 
 KILL_HANDLER = r'''    if command == "?kill":
-        if not is_premium_user(message.author.id):
-            await message.reply("🔒 `?kill` requiere Premium.", mention_author=False)
-            return True
         target = message.mentions[0] if message.mentions else None
         if target is None and message.reference and message.reference.message_id:
             try:
@@ -92,12 +89,7 @@ def patch_app_file(app_file: Path) -> None:
         marker = "async def handle_reaction_command(message, content):\n"
         if marker not in source:
             raise RuntimeError("No encontré el manejador de comandos de reacción en app.py.")
-        helpers = HELPERS.replace(
-            "# VANTARMOR_REACTION_COMMANDS_PATCH_V1\n",
-            "# VANTARMOR_REACTION_COMMANDS_PATCH_V1\nfrom premium_store import is_premium_user\n\n",
-            1,
-        )
-        source = source.replace(marker, helpers + "\n" + marker, 1)
+        source = source.replace(marker, HELPERS + "\n\n" + marker, 1)
 
     if '    if command in ("?hug", "?spank"):\n' not in source:
         raise RuntimeError("No encontré el manejador existente de ?spank.")
@@ -108,21 +100,10 @@ def patch_app_file(app_file: Path) -> None:
             raise RuntimeError("No encontré el punto de inserción para ?kill.")
         source = source.replace(insertion, KILL_HANDLER + insertion, 1)
 
-    banana_marker = '    if command == "?banana":\n'
-    premium_guard = (
-        '    if command in ("?banana", "?spank") and not is_premium_user(message.author.id):\n'
-        '        await message.reply("🔒 Este comando requiere Premium.", mention_author=False)\n'
-        '        return True\n\n'
-    )
-    if premium_guard.strip() not in source:
-        if banana_marker not in source:
-            raise RuntimeError("No encontré el comando ?banana.")
-        source = source.replace(banana_marker, premium_guard + banana_marker, 1)
-
+    # Keep these prefix commands ordinary/free; Premium remains governed by the
+    # existing Premium policy for slash commands and other current features.
     source = source.replace('random_anime_gif("spank")', 'random_anime_gif("slap")')
 
-    # Find the reply belonging to the spank embed by anchoring on its unique
-    # description, rather than matching a brittle multiline block verbatim.
     spank_description = 'description=f"🍑 {message.author.mention} le dio una nalgada a {target.mention}."'
     description_at = source.find(spank_description)
     if description_at < 0:
