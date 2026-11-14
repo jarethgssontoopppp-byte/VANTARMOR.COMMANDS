@@ -31,8 +31,8 @@ def patch_app_file(app_file: Path) -> None:
         source = source.replace(PREMIUM_TREE_LINE, PREMIUM_TREE_LINE + REGISTER_LINE, 1)
     app_file.write_text(source, encoding="utf-8")
 
-    # Lockdown and account-age filtering remain free; all other security commands
-    # retain the Premium check in their individual handlers.
+    # Keep the two explicitly free security commands free, while the other
+    # security commands continue to check Premium inside their handlers.
     security_file = app_file.with_name("premium_security_system.py")
     security_source = security_file.read_text(encoding="utf-8")
     old_guard = 'if not is_premium_user(interaction.user.id):'

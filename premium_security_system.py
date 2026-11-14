@@ -71,7 +71,8 @@ async def _require_premium_admin(interaction):
     if not (interaction.user.id == interaction.guild.owner_id or interaction.user.guild_permissions.administrator):
         await interaction.response.send_message("Solo el propietario o un administrador puede configurar esta protección.", ephemeral=True)
         return False
-    if not is_premium_user(interaction.user.id):
+    command = interaction.command
+    if (command is None or command.name not in {"lockdown", "filtro-cuentas"}) and not is_premium_user(interaction.user.id):
         await interaction.response.send_message("Esta protección requiere Premium activo en tu cuenta.", ephemeral=True)
         return False
     return True
@@ -110,8 +111,6 @@ async def _set_lockdown(guild, enabled, *, reason):
         originals = {}
         errors = 0
         for channel in guild.text_channels:
-            if channel.is_news() if hasattr(channel, "is_news") else False:
-                pass
             overwrite = channel.overwrites_for(guild.default_role)
             originals[str(channel.id)] = overwrite.send_messages
             overwrite.send_messages = False
@@ -149,11 +148,11 @@ async def _set_lockdown(guild, enabled, *, reason):
         current["lockdown"] = {"active": False, "original_send_messages": {}}
 
     _update_guild(guild.id, clear)
-    return True, "Modo pánico desactivado; permisos guardados restaurados." + (f" No se pudieron restaurar {errors} canal(es)." if errors else "")
+    return True, "Modo pánico desactivado; permisos guardados restaurados." + (f" No se pudieron restaurar {errors}." if errors else "")
 
 
 async def _trigger_lockdown(guild, reason):
-    success, message = await _set_lockdown(guild, True, reason=reason)
+    _, message = await _set_lockdown(guild, True, reason=reason)
     await _security_log(guild, "🚨 Alerta de seguridad", f"{reason}\n{message}", color=discord.Color.red())
 
 
@@ -174,20 +173,15 @@ async def _check_audit_burst(guild, action, target_id, title):
             executor = entry.user
             if executor is None or executor.bot:
                 return
-            key = (guild.id, executor.id)
-            recent = NUKE_EVENTS[key]
+            recent = NUKE_EVENTS[(guild.id, executor.id)]
             stamp = time.monotonic()
             window = int(rules.get("window_seconds", 10))
             while recent and stamp - recent[0] > window:
                 recent.popleft()
             recent.append(stamp)
-            threshold = int(rules.get("threshold", 3))
-            if len(recent) >= threshold:
+            if len(recent) >= int(rules.get("threshold", 3)):
                 recent.clear()
-                await _trigger_lockdown(
-                    guild,
-                    f"Anti-Nuke detectó {title} repetidos por {executor} (`{executor.id}`). No se expulsó ni se quitaron permisos automáticamente; revisa el registro de auditoría.",
-                )
+                await _trigger_lockdown(guild, f"Anti-Nuke detectó {title} repetidos por {executor} (`{executor.id}`). No se expulsó ni se quitaron permisos automáticamente; revisa el registro de auditoría.")
             return
     except (discord.Forbidden, discord.HTTPException) as error:
         print(f"No se pudo consultar audit log de {guild.id}: {error}")
@@ -261,13 +255,7 @@ class CaptchaModal(discord.ui.Modal):
         self.guild_id = guild_id
         self.role_id = role_id
         self.expected = first + second if operator == "+" else first - second
-        self.answer = discord.ui.TextInput(
-            label=f"Resuelve: {first} {operator} {second} = ?",
-            placeholder="Escribe el resultado",
-            min_length=1,
-            max_length=4,
-            required=True,
-        )
+        self.answer = discord.ui.TextInput(label=f"Resuelve: {first} {operator} {second} = ?", placeholder="Escribe el resultado", min_length=1, max_length=4, required=True)
         self.add_item(self.answer)
 
     async def on_submit(self, interaction):
@@ -364,7 +352,7 @@ def register_security_commands(tree, client):
 
     @tree.command(name="filtro-cuentas", description="Retiene cuentas nuevas con un rol para revisión manual")
     @app_commands.describe(dias="Antigüedad mínima en días (0 desactiva)", rol_revision="Rol de cuarentena configurado para ocultar canales privados")
-    async def account_age_filter(interaction: discord.Interaction, dias: app_commands.Range[int, 0, 365], rol_revision: discord.Role = None):
+    async def account_age_filter(interaction: discord.Interaction, dias: app_commands.Range[int, 0, 365], rol_revision: Optional[discord.Role] = None):
         if not await _require_premium_admin(interaction):
             return
         _update_guild(interaction.guild.id, lambda state: state.update(min_account_age_days=int(dias), quarantine_role_id=rol_revision.id if rol_revision else None))
@@ -406,7 +394,7 @@ def register_security_commands(tree, client):
             return
         embed = discord.Embed(
             title="🛡️ Verificación del servidor",
-            description="Pulsa **Verificar** y resuelve la operación sencilla para recibir el rol de acceso. Configura @everyone para ver únicamente este canal hasta verificar.",
+            description="Pulsa **Verificar** y resuelve la operación sencilla para recibir el rol de acceso. Configura los permisos de @everyone para limitar el acceso hasta verificar.",
             color=discord.Color.blurple(),
         )
         try:

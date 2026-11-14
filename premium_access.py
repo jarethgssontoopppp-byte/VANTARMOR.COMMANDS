@@ -1,26 +1,18 @@
-"""Premium access policy for Discord application commands."""
-from discord import app_commands
+"""Application command tree: retain only command-specific Premium checks.
 
-from premium_store import is_premium_user
+Ordinary commands remain available to everyone. Premium-only features enforce
+entitlement in their own handlers, so this tree must not impose a blanket gate.
+"""
+from discord import app_commands
 
 FREE_COMMANDS = frozenset({"lockdown", "filtro-cuentas"})
 
 
 class PremiumCommandTree(app_commands.CommandTree):
-    """CommandTree that rejects non-Premium users before running commands."""
+    """Allow commands through to their handlers' own authorization checks."""
 
     async def interaction_check(self, interaction):
-        command = interaction.command
-        if command is not None and command.name in FREE_COMMANDS:
-            return True
-        if is_premium_user(interaction.user.id):
-            return True
-        message = "🔒 Este comando requiere Premium. Activa Premium desde la web de Vantarmor o contacta al equipo."
-        if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=True)
-        else:
-            await interaction.response.send_message(message, ephemeral=True)
-        return False
+        return True
 
 
 __all__ = ["PremiumCommandTree", "FREE_COMMANDS"]
