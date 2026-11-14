@@ -2,6 +2,7 @@ import runpy
 from pathlib import Path
 
 from message_reactions_patch import patch_app as patch_message_features
+from reaction_commands_patch import patch_app_file as patch_reaction_commands
 from premium_backup_patch import patch_app_file as patch_premium_features
 from premium_key_commands_patch import patch_app_file as remove_premium_key_commands
 from global_commands_patch import patch_app_file as patch_global_commands
@@ -9,6 +10,7 @@ from ticket_image_patch import patch_app_file as patch_ticket_image
 from blue_reaction_embeds_patch import patch_app_file as patch_blue_reaction_embeds
 from premium_security_patch import patch_app_file as patch_premium_security
 from guild_profile_settings import install_guild_profile_settings
+from profile_upload_support import install_profile_upload_support
 import web_server
 from web_server import start_website
 
@@ -32,6 +34,7 @@ def main():
         raise FileNotFoundError(f"No encontré el archivo del bot: {APP_FILE}")
     fix_welcome_async_declaration()
     patch_message_features(APP_FILE)
+    patch_reaction_commands(APP_FILE)
     patch_premium_features(APP_FILE)
     remove_premium_key_commands(APP_FILE)
     patch_ticket_image(APP_FILE)
@@ -39,6 +42,7 @@ def main():
     patch_premium_security(APP_FILE)
     patch_global_commands(APP_FILE)
     install_guild_profile_settings(web_server.Handler)
+    install_profile_upload_support(web_server.Handler)
     start_website()
     print("Iniciando Vantarmor Commands...")
     runpy.run_path(str(APP_FILE), run_name="__main__")
