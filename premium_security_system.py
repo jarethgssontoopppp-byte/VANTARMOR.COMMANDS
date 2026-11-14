@@ -119,8 +119,10 @@ async def _set_lockdown(guild, enabled, *, reason):
                 await channel.set_permissions(guild.default_role, overwrite=overwrite, reason=reason)
             except (discord.Forbidden, discord.HTTPException):
                 errors += 1
+
         def mark(current):
             current["lockdown"] = {"active": True, "original_send_messages": originals, "started_at": int(time.time())}
+
         _update_guild(guild.id, mark)
         return True, f"Modo pánico activado en {len(originals) - errors} canal(es)." + (f" No se pudieron bloquear {errors}." if errors else "")
 
@@ -142,8 +144,10 @@ async def _set_lockdown(guild, enabled, *, reason):
             )
         except (discord.Forbidden, discord.HTTPException):
             errors += 1
+
     def clear(current):
         current["lockdown"] = {"active": False, "original_send_messages": {}}
+
     _update_guild(guild.id, clear)
     return True, "Modo pánico desactivado; permisos guardados restaurados." + (f" No se pudieron restaurar {errors} canal(es)." if errors else "")
 
@@ -189,12 +193,12 @@ async def _check_audit_burst(guild, action, target_id, title):
         print(f"No se pudo consultar audit log de {guild.id}: {error}")
 
 
-async def on_channel_delete(channel):
+async def on_guild_channel_delete(channel):
     if channel.guild is not None:
         await _check_audit_burst(channel.guild, discord.AuditLogAction.channel_delete, channel.id, "eliminación de canales")
 
 
-async def on_role_delete(role):
+async def on_guild_role_delete(role):
     await _check_audit_burst(role.guild, discord.AuditLogAction.role_delete, role.id, "eliminación de roles")
 
 
@@ -248,7 +252,7 @@ async def on_member_join(member):
 async def on_invite_create(invite):
     state = _guild_config(invite.guild.id)
     if state.get("anti_raid", {}).get("enabled"):
-        await _security_log(invite.guild, "🔗 Invitación nueva durante Anti-Raid", f"Se creó una invitación en {invite.channel.mention if invite.channel else 'un canal desconocido'}. Revisa si es legítima.", color=discord.Color.orange())
+        await _security_log(invite.guild, "🔗 Invitación nueva durante Anti-Raid", f"Se creó una invitación en {invite.channel.mention if invite.channel else 'un canal desconocido'}. Revisa la actividad si ocurre un pico de entradas.", color=discord.Color.orange())
 
 
 class CaptchaModal(discord.ui.Modal):
@@ -312,11 +316,11 @@ class CaptchaView(discord.ui.View):
 def register_security_commands(tree, client):
     """Register Premium security controls and listeners on the Discord client."""
     if not getattr(client, "premium_security_listeners_registered", False):
-        client.add_listener(on_member_join, "on_member_join")
-        client.add_listener(on_channel_delete, "on_guild_channel_delete")
-        client.add_listener(on_role_delete, "on_guild_role_delete")
-        client.add_listener(on_member_ban, "on_member_ban")
-        client.add_listener(on_invite_create, "on_invite_create")
+        client.event(on_member_join)
+        client.event(on_guild_channel_delete)
+        client.event(on_guild_role_delete)
+        client.event(on_member_ban)
+        client.event(on_invite_create)
         client.add_view(CaptchaView())
         client.premium_security_listeners_registered = True
 
@@ -346,6 +350,7 @@ def register_security_commands(tree, client):
         if not bot.bot:
             await interaction.response.send_message("Selecciona una cuenta bot.", ephemeral=True)
             return
+
         def change(state):
             allowed = {str(value) for value in state.get("allowed_bots", [])}
             if accion.value == "allow":
@@ -353,16 +358,17 @@ def register_security_commands(tree, client):
             else:
                 allowed.discard(str(bot.id))
             state["allowed_bots"] = sorted(allowed)
+
         _update_guild(interaction.guild.id, change)
-        await interaction.response.send_message(f"✅ Bot {bot.mention} {'autorizado' if accion.value == 'allow' else 'revocado'}. Los bots no autorizados que intenten entrar serán expulsados si el bot tiene permiso.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Bot {bot.mention} {'autorizado' if accion.value == 'allow' else 'revocado'}. Los bots no autorizados que intenten entrar serán expulsados si la protección está activa.", ephemeral=True)
 
     @tree.command(name="filtro-cuentas", description="Retiene cuentas nuevas con un rol para revisión manual")
     @app_commands.describe(dias="Antigüedad mínima en días (0 desactiva)", rol_revision="Rol de cuarentena configurado para ocultar canales privados")
-    async def account_age_filter(interaction: discord.Interaction, dias: app_commands.Range[int, 0, 365], rol_revision: Optional[discord.Role] = None):
+    async def account_age_filter(interaction: discord.Interaction, dias: app_commands.Range[int, 0, 365], rol_revision: discord.Role = None):
         if not await _require_premium_admin(interaction):
             return
         _update_guild(interaction.guild.id, lambda state: state.update(min_account_age_days=int(dias), quarantine_role_id=rol_revision.id if rol_revision else None))
-        extra = " Configura los permisos del rol para que las cuentas retenidas solo vean el canal de revisión." if dias and rol_revision else " El filtro solo genera alertas hasta que elijas un rol de revisión." if dias else ""
+        extra = " Configura los permisos del rol para que las cuentas retenidas solo vean el canal de revisión." if dias and rol_revision else " El filtro solo genera alertas hasta que elijas un rol de revisión."
         await interaction.response.send_message(f"✅ Filtro de cuentas configurado: mínimo {dias} día(s).{extra}", ephemeral=True)
 
     @tree.command(name="lockdown", description="Activa o desactiva el modo pánico Premium")
@@ -408,9 +414,11 @@ def register_security_commands(tree, client):
         except (discord.Forbidden, discord.HTTPException) as error:
             await interaction.response.send_message(f"No pude publicar el panel: {error}", ephemeral=True)
             return
+
         def save_panel(state):
             panels = state.setdefault("captcha_panels", {})
             panels[str(message.id)] = {"guild_id": guild.id, "verified_role_id": rol_verificado.id, "channel_id": canal.id}
+
         _update_guild(guild.id, save_panel)
         await interaction.response.send_message(f"✅ Panel de captcha enviado a {canal.mention}.", ephemeral=True)
 
