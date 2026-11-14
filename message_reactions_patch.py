@@ -9,13 +9,15 @@ BANANA_GIFS = (
 REACTION_GIF_ENDPOINTS = {
     "kiss": ("https://nekos.best/api/v2/kiss", "https://api.waifu.pics/sfw/kiss"),
     "slap": ("https://nekos.best/api/v2/slap", "https://api.waifu.pics/sfw/slap"),
-    "spank": ("https://nekos.best/api/v2/spank", "https://api.waifu.pics/sfw/spank", "https://api.waifu.pics/sfw/slap"),
+    # Prefer APIs with an actual anime-spank category; do not substitute a slap GIF.
+    "spank": ("https://nekos.best/api/v2/spank", "https://api.waifu.pics/sfw/spank"),
     "hug": ("https://nekos.best/api/v2/hug", "https://api.waifu.pics/sfw/hug"),
 }
 REACTION_GIF_FALLBACKS = {
     "kiss": ("https://media.tenor.com/-I2QfQvG8fEAAAAC/anime-kiss.gif", "https://media.giphy.com/media/10UVJ0IXjUbPug/giphy.gif"),
     "slap": ("https://media.tenor.com/v1a5sM-9VnoAAAAC/anime-slap.gif", "https://media.giphy.com/media/3XlEk2RxPS1m8/giphy.gif"),
-    "spank": ("https://media.tenor.com/v1a5sM-9VnoAAAAC/anime-slap.gif",),
+    # No slap fallback here: only show a GIF when a spank-category API returns one.
+    "spank": (),
     "hug": ("https://media.tenor.com/1XqT5gW0AAAAM/anime-hug.gif", "https://media.giphy.com/media/od5H3PmEG5EVq/giphy.gif"),
 }
 
@@ -189,10 +191,12 @@ async def handle_reaction_command(message, content):
             )
             return True
         embed = discord.Embed(
-            description=f"🍑 {message.author.mention} le dio una nalgada a {target.mention}.",
+            description=f"🍑 {message.author.mention} le da una palmadita traviesa a {target.mention}.",
             color=discord.Color.orange(),
         )
-        embed.set_image(url=await random_anime_gif("spank"))
+        image = await random_anime_gif("spank")
+        if image:
+            embed.set_image(url=image)
         await message.reply(
             embed=embed,
             mention_author=False,
