@@ -24,15 +24,20 @@ def patch_app_file(app_file: Path) -> None:
         source = source.replace(tree_anchor, tree_anchor + REGISTER_LINE, 1)
     app_file.write_text(source, encoding="utf-8")
 
-    # Preserve the requested free security commands while keeping all the other
-    # security controls Premium-only.
+    # Patch legacy source if present. Accept the newer equivalent guard too,
+    # rather than crashing when the source has already been updated.
     security_file = app_file.with_name("premium_security_system.py")
     security_source = security_file.read_text(encoding="utf-8")
     if OLD_PREMIUM_GUARD in security_source:
         security_source = security_source.replace(OLD_PREMIUM_GUARD, FREE_SECURITY_GUARD, 1)
         security_file.write_text(security_source, encoding="utf-8")
-    elif FREE_SECURITY_GUARD not in security_source:
-        raise RuntimeError("No encontré la validación Premium esperada en premium_security_system.py.")
+        return
+
+    helper_start = security_source.find("async def _require_premium_admin(")
+    helper_end = security_source.find("\ndef _get_audit_channel", helper_start)
+    helper = security_source[helper_start:helper_end] if helper_start >= 0 and helper_end > helper_start else ""
+    if "is_premium_user(interaction.user.id)" not in helper:
+        raise RuntimeError("No encontré una validación Premium segura en _require_premium_admin.")
 
 
 __all__ = ["patch_app_file"]

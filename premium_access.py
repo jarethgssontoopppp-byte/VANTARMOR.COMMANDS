@@ -1,7 +1,7 @@
-"""Premium command policy.
+"""Global slash-command access policy.
 
-Premium is checked by the handlers of features that actually require it;
-there is deliberately no blanket Premium gate for ordinary slash commands.
+Ordinary commands remain free. Features requiring Premium enforce it in their
+individual handlers rather than using a blanket tree-wide restriction.
 """
 from discord import app_commands
 
